@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SecLite — Unified Security Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+<script src="scanner.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #050A0F;
+    --bg2:      #080F18;
+    --card:     rgba(8,16,28,0.85);
+    --border:   rgba(0,180,255,0.15);
+    --cyan:     #00B4FF;
+    --cyan2:    rgba(0,180,255,0.08);
+    --text:     #C8E6FF;
+    --muted:    #5A8FA8;
+    --muted2:   #3A5A6A;
+    --mono:     'Share Tech Mono', monospace;
+    --orb:      'Orbitron', sans-serif;
+    --raj:      'Rajdhani', sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--raj); min-height: 100vh; }
+  body::before { content:''; position:fixed; inset:0; background-image: linear-gradient(rgba(0,180,255,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,255,0.02) 1px,transparent 1px); background-size:60px 60px; pointer-events:none; z-index:0; }
+
+  /* ── Layout ── */
+  #app { position:relative; z-index:1; }
+  nav  { position:sticky; top:0; z-index:100; background:rgba(5,10,15,0.96); border-bottom:1px solid var(--border); backdrop-filter:blur(20px); padding:0 28px; display:flex; align-items:center; justify-content:space-between; height:64px; }
+  nav .logo { display:flex; align-items:center; gap:10px; cursor:pointer; }
+  nav .logo span { font-family:var(--orb); font-size:1.2rem; font-weight:900; color:var(--cyan); text-shadow:0 0 15px rgba(0,180,255,0.6); letter-spacing:3px; }
+  nav .navlinks { display:flex; gap:4px; }
+  nav .navlinks button { padding:8px 18px; border-radius:6px; border:1px solid transparent; background:transparent; cursor:pointer; font-family:var(--orb); font-size:0.68rem; letter-spacing:2px; color:var(--muted); transition:all 0.2s; }
+  nav .navlinks button.active { color:var(--cyan); background:rgba(0,180,255,0.1); border-color:rgba(0,180,255,0.3); }
+  nav .user-zone { display:flex; align-items:center; gap:10px; }
+  nav .user-zone .username { color:var(--muted); font-family:var(--mono); font-size:0.8rem; }
+  nav .user-zone .logout-btn { background:rgba(255,0,60,0.1); border:1px solid rgba(255,0,60,0.3); border-radius:6px; color:#FF6080; cursor:pointer; padding:6px 14px; font-family:var(--raj); font-size:0.85rem; }
+  nav .admin-badge { background:rgba(255,0,60,0.15); border:1px solid rgba(255,0,60,0.4); color:#FF6080; padding:3px 10px; border-radius:4px; font-family:var(--mono); font-size:0.68rem; letter-spacing:1px; }
+
+  main { max-width:980px; margin:0 auto; padding:28px; }
+
+  /* ── Auth Gate ── */
+  #auth-gate { position:fixed; inset:0; background:#050A0F; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; }
+  #auth-gate::before { content:''; position:fixed; inset:0; background-image:linear-gradient(rgba(0,180,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,180,255,0.03) 1px,transparent 1px); background-size:50px 50px; pointer-events:none; }
+  .auth-box { background:rgba(10,20,35,0.9); border:1px solid rgba(0,180,255,0.2); border-radius:12px; padding:40px; width:100%; max-width:420px; position:relative; z-index:1; box-shadow:0 0 60px rgba(0,180,255,0.1); }
+  .auth-box h2 { font-family:var(--orb); font-size:0.9rem; letter-spacing:2px; color:var(--cyan); text-align:center; margin-bottom:28px; }
+  .auth-btn-group button { width:100%; padding:14px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; font-family:var(--raj); font-size:1rem; font-weight:600; letter-spacing:1px; transition:all 0.2s; margin-bottom:12px; }
+  .auth-btn-user { background:transparent; border:1px solid rgba(0,180,255,0.4); color:var(--text); }
+  .auth-btn-user:hover { border-color:var(--cyan); box-shadow:0 0 20px rgba(0,180,255,0.3); background:rgba(0,180,255,0.05); }
+  .auth-btn-admin { background:rgba(255,0,60,0.05); border:1px solid rgba(255,0,60,0.3); color:#FF6080; margin-top:4px; }
+  .auth-btn-admin:hover { border-color:#FF003C; box-shadow:0 0 15px rgba(255,0,60,0.3); }
+  .auth-divider { text-align:center; color:var(--muted2); font-family:var(--mono); font-size:0.75rem; margin:8px 0; }
+  .auth-back { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem; margin-right:10px; }
+  .auth-form-title { font-family:var(--orb); font-size:0.85rem; letter-spacing:2px; margin-bottom:24px; display:flex; align-items:center; }
+  .auth-label { color:var(--muted); font-family:var(--mono); font-size:0.72rem; letter-spacing:1px; display:block; margin-bottom:6px; }
+  .auth-input { width:100%; padding:12px; background:rgba(0,180,255,0.04); border:1px solid rgba(0,180,255,0.2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:0.9rem; outline:none; margin-bottom:14px; }
+  .auth-input:focus { border-color:var(--cyan); }
+  .auth-input-red { background:rgba(255,0,60,0.04); border-color:rgba(255,0,60,0.2); }
+  .auth-submit { width:100%; padding:13px; border-radius:8px; cursor:pointer; font-family:var(--orb); font-size:0.82rem; letter-spacing:2px; }
+  .auth-submit-user  { background:linear-gradient(135deg,rgba(0,180,255,0.2),rgba(0,100,200,0.3)); border:1px solid rgba(0,180,255,0.5); color:var(--cyan); }
+  .auth-submit-admin { background:linear-gradient(135deg,rgba(255,0,60,0.2),rgba(200,0,40,0.3)); border:1px solid rgba(255,0,60,0.5); color:#FF6080; }
+  .auth-error { color:#FF003C; font-family:var(--mono); font-size:0.78rem; text-align:center; margin-bottom:12px; padding:8px; background:rgba(255,0,60,0.1); border-radius:4px; }
+
+  /* ── Cards / Panels ── */
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:16px; }
+  .panel-title { font-family:var(--orb); font-size:0.85rem; color:var(--cyan); letter-spacing:2px; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+
+  /* ── Scan Input ── */
+  .scan-form { display:flex; gap:10px; }
+  .scan-input-wrap { flex:1; position:relative; }
+  .scan-input { width:100%; padding:13px 16px 13px 44px; background:rgba(0,180,255,0.04); border:1px solid rgba(0,180,255,0.25); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:0.88rem; outline:none; }
+  .scan-input:focus { border-color:var(--cyan); }
+  .scan-input-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--muted2); font-size:16px; pointer-events:none; }
+  .scan-btn { padding:13px 28px; background:linear-gradient(135deg,rgba(0,180,255,0.22),rgba(0,90,180,0.32)); border:1px solid rgba(0,180,255,0.45); border-radius:6px; color:var(--cyan); cursor:pointer; font-family:var(--orb); font-size:0.78rem; letter-spacing:2px; font-weight:700; white-space:nowrap; }
+  .scan-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .api-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+  .api-tag { background:rgba(0,180,255,0.08); border:1px solid rgba(0,180,255,0.18); color:var(--muted2); padding:3px 10px; border-radius:12px; font-family:var(--mono); font-size:0.63rem; letter-spacing:1px; }
+
+  /* ── Progress ── */
+  .progress-wrap { margin-bottom:16px; }
+  .progress-bar-bg { background:rgba(0,0,0,0.4); border-radius:4px; height:5px; overflow:hidden; margin:10px 0 8px; }
+  .progress-bar-fill { height:100%; background:linear-gradient(90deg,#00B4FF,#0060CC); border-radius:4px; transition:width 0.8s ease; box-shadow:0 0 8px rgba(0,180,255,0.5); }
+  .progress-label { display:flex; justify-content:space-between; align-items:center; }
+  .progress-step { color:var(--text); font-family:var(--mono); font-size:0.78rem; }
+  .progress-pct  { color:var(--cyan); font-family:var(--orb); font-size:0.85rem; font-weight:700; }
+
+  /* ── Score Gauge ── */
+  .results-summary { display:flex; align-items:center; gap:24px; flex-wrap:wrap; padding:20px 24px; border-radius:8px; margin-bottom:16px; }
+  .gauge-wrap { text-align:center; min-width:110px; }
+  .gauge-score { font-family:var(--orb); font-size:1.9rem; font-weight:900; line-height:1; }
+  .gauge-label { font-family:var(--mono); font-size:0.55rem; letter-spacing:2px; color:var(--muted2); margin-top:4px; }
+  .gauge-sev   { font-family:var(--orb); font-size:0.7rem; letter-spacing:2px; font-weight:700; margin-top:6px; }
+  .summary-right { flex:1; min-width:200px; }
+  .summary-title { font-family:var(--orb); font-size:1rem; font-weight:700; letter-spacing:2px; margin-bottom:6px; }
+  .summary-sub   { color:#8AAFC0; font-family:var(--raj); font-size:0.95rem; margin-bottom:12px; }
+  .stat-badges { display:flex; gap:8px; flex-wrap:wrap; }
+  .stat-badge { flex:1; min-width:60px; background:rgba(10,20,35,0.8); border-radius:6px; padding:10px 10px; text-align:center; }
+  .stat-badge .val { font-family:var(--orb); font-size:1.2rem; font-weight:900; }
+  .stat-badge .lbl { font-family:var(--mono); font-size:0.58rem; letter-spacing:1px; color:var(--muted2); margin-top:2px; }
+  .pdf-btn { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; background:rgba(0,180,255,0.1); border:1px solid rgba(0,180,255,0.4); border-radius:6px; color:var(--cyan); cursor:pointer; font-family:var(--orb); font-size:0.68rem; letter-spacing:2px; align-self:flex-start; }
+
+  /* ── Module Expander ── */
+  .modules-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+  .module-row { border-radius:6px; overflow:hidden; }
+  .module-header { width:100%; padding:13px 16px; display:flex; align-items:center; gap:12px; background:rgba(8,16,28,0.85); border:1px solid; border-radius:6px; cursor:pointer; text-align:left; transition:all 0.2s; }
+  .module-header:hover { filter:brightness(1.1); }
+  .module-chevron { font-size:14px; flex-shrink:0; }
+  .module-name { font-family:var(--orb); font-size:0.72rem; color:var(--text); letter-spacing:1px; font-weight:700; flex:1; }
+  .module-bar-wrap { display:flex; align-items:center; gap:10px; }
+  .module-bar { width:90px; height:5px; background:rgba(255,255,255,0.07); border-radius:3px; overflow:hidden; flex-shrink:0; }
+  .module-bar-fill { height:100%; border-radius:3px; }
+  .module-score { font-family:var(--orb); font-size:0.9rem; font-weight:900; min-width:30px; text-align:right; }
+  .module-sev { padding:2px 9px; border-radius:4px; font-family:var(--mono); font-size:0.63rem; letter-spacing:1px; border:1px solid; min-width:58px; text-align:center; flex-shrink:0; }
+
+  .module-body { border:1px solid; border-top:none; border-radius:0 0 6px 6px; padding:16px; display:none; }
+  .module-body.open { display:block; }
+  .module-summary { font-family:var(--raj); font-size:0.95rem; color:#8AAFC0; line-height:1.6; padding-left:12px; border-left-width:2px; border-left-style:solid; margin-bottom:18px; }
+  .module-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+  .module-section { background:rgba(0,0,0,0.3); border-radius:6px; padding:14px; }
+  .module-section-title { display:flex; align-items:center; gap:6px; margin-bottom:10px; font-family:var(--mono); font-size:0.68rem; letter-spacing:2px; }
+  .module-section-item { display:flex; gap:8px; margin-bottom:6px; color:var(--text); font-family:var(--raj); font-size:0.9rem; line-height:1.45; }
+  .module-section-num { font-family:var(--mono); font-size:0.68rem; flex-shrink:0; margin-top:2px; }
+  .module-threat { background:rgba(255,140,0,0.05); border:1px solid rgba(255,140,0,0.2); border-radius:6px; padding:14px; }
+  .module-threat-title { display:flex; align-items:center; gap:6px; margin-bottom:8px; font-family:var(--mono); font-size:0.68rem; letter-spacing:2px; color:#FF8C00; }
+  .module-threat p { color:#E0C080; font-family:var(--raj); font-size:0.9rem; line-height:1.6; }
+  .module-refs { margin-top:12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .module-refs span { color:var(--muted2); font-family:var(--mono); font-size:0.68rem; }
+  .module-refs a { display:inline-flex; align-items:center; gap:4px; color:#6080FF; text-decoration:none; font-size:0.8rem; font-family:var(--raj); padding:3px 10px; background:rgba(100,128,255,0.08); border:1px solid rgba(100,128,255,0.2); border-radius:4px; }
+  .module-refs a:hover { background:rgba(100,128,255,0.15); }
+
+  /* ── Info banner ── */
+  .info-banner { display:flex; align-items:center; gap:8px; background:rgba(0,180,255,0.04); border:1px solid rgba(0,180,255,0.12); border-radius:6px; padding:9px 14px; margin-bottom:14px; color:var(--muted2); font-family:var(--mono); font-size:0.7rem; letter-spacing:1px; }
+
+  /* ── Empty state ── */
+  .empty-state { text-align:center; padding:70px 0; color:#1A2A35; }
+  .empty-state p { font-family:var(--mono); font-size:0.85rem; color:#2A3A45; margin-top:12px; letter-spacing:1px; }
+
+  /* ── History ── */
+  .history-row { background:var(--card); border-radius:10px; overflow:hidden; margin-bottom:10px; }
+  .history-row-header { padding:14px 20px; display:flex; align-items:center; gap:14px; cursor:pointer; }
+  .history-icon { border-radius:8px; padding:8px; }
+  .history-url { font-family:var(--mono); font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+  .history-meta { font-size:0.78rem; color:var(--muted2); margin-top:2px; }
+  .history-score { font-family:var(--orb); font-size:1.3rem; font-weight:900; text-align:center; line-height:1; min-width:42px; }
+  .history-sev   { font-family:var(--mono); font-size:0.6rem; letter-spacing:1px; text-align:center; margin-top:2px; }
+  .history-actions { display:flex; align-items:center; gap:8px; }
+  .history-pdf-btn { background:rgba(0,180,255,0.1); border:1px solid rgba(0,180,255,0.3); border-radius:6px; color:var(--cyan); cursor:pointer; padding:5px 12px; display:flex; align-items:center; gap:5px; font-size:0.75rem; font-family:var(--raj); }
+  .history-del-btn { background:rgba(255,0,60,0.08); border:1px solid rgba(255,0,60,0.2); border-radius:6px; color:#FF6080; cursor:pointer; padding:6px; }
+  .history-modules { padding:0 20px 18px; border-top:1px solid rgba(0,180,255,0.1); }
+  .history-modules .modules-list { margin-top:14px; }
+
+  /* ── Blogs ── */
+  .blogs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:18px; }
+  .news-card { background:rgba(10,20,35,0.85); border:1px solid rgba(0,180,255,0.13); border-radius:10px; overflow:hidden; transition:all 0.25s; display:flex; flex-direction:column; text-decoration:none; color:inherit; }
+  .news-card:hover { border-color:rgba(0,180,255,0.4); box-shadow:0 0 25px rgba(0,180,255,0.12); transform:translateY(-3px); }
+  .news-thumb { height:155px; overflow:hidden; position:relative; }
+  .news-thumb img { width:100%; height:100%; object-fit:cover; filter:brightness(0.65) saturate(0.5); }
+  .news-thumb-overlay { position:absolute; inset:0; background:linear-gradient(to top,rgba(10,20,35,0.8) 0%,transparent 60%); }
+  .news-cat { position:absolute; top:10px; left:10px; padding:3px 8px; border-radius:4px; font-family:var(--mono); font-size:0.63rem; letter-spacing:1px; border:1px solid; }
+  .news-body { padding:14px; flex:1; display:flex; flex-direction:column; }
+  .news-title { color:var(--text); font-family:var(--raj); font-size:1.02rem; font-weight:700; line-height:1.4; margin-bottom:8px; flex:1; }
+  .news-summary { color:var(--muted); font-family:var(--raj); font-size:0.85rem; line-height:1.5; margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:3; line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .news-footer { display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(0,180,255,0.08); padding-top:10px; font-family:var(--mono); font-size:0.68rem; }
+  .news-date { color:var(--muted2); }
+  .news-source { color:var(--cyan); display:flex; align-items:center; gap:4px; }
+
+  /* ── PDF report ── */
+  .pdf-section-title { font-size:12pt; font-weight:bold; text-decoration:underline; margin-top:16px; }
+  .pdf-finding { margin-left:16px; margin-top:4px; }
+
+  /* ── Ticker ── */
+  .ticker { background:rgba(255,60,0,0.06); border:1px solid rgba(255,60,0,0.18); border-radius:6px; padding:8px 14px; margin-bottom:22px; display:flex; align-items:center; gap:10px; }
+  .ticker span { color:#CC5040; font-family:var(--mono); font-size:0.72rem; letter-spacing:1px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-track { background:#0A0F18; }
+  ::-webkit-scrollbar-thumb { background:#1A3A4A; border-radius:3px; }
+
+  /* ── Spinner ── */
+  .spinner { width:28px; height:28px; border:3px solid rgba(0,180,255,0.15); border-top-color:var(--cyan); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ── Pages ── */
+  .page { display:none; }
+  .page.active { display:block; }
+
+  @media(max-width:600px) {
+    main { padding:16px; }
+    nav { padding:0 14px; }
+    nav .navlinks button { padding:7px 12px; font-size:0.6rem; }
+    .results-summary { flex-direction:column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ AUTH GATE ═══════════ -->
+<div id="auth-gate">
+  <div style="text-align:center;margin-bottom:36px;position:relative;z-index:1">
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px">
+      <span style="font-size:2rem">🛡</span>
+      <span style="font-family:var(--orb);font-size:2.2rem;font-weight:900;color:var(--cyan);text-shadow:0 0 20px rgba(0,180,255,0.8);letter-spacing:4px">SECLITE</span>
+    </div>
+    <p style="color:var(--muted);font-family:var(--mono);font-size:0.82rem;letter-spacing:3px">UNIFIED SECURITY SCANNER</p>
+  </div>
+
+  <div class="auth-box" id="auth-selector">
+    <h2>ACCESS PORTAL</h2>
+    <div class="auth-btn-group">
+      <button class="auth-btn-user" onclick="showAuthForm('user')">👤 &nbsp;USER LOGIN</button>
+      <div class="auth-divider">── OR ──</div>
+      <button class="auth-btn-admin" onclick="showAuthForm('admin')">⚡ ADMIN ACCESS</button>
+    </div>
+  </div>
+
+  <div class="auth-box" id="auth-user-form" style="display:none">
+    <div class="auth-form-title" style="color:var(--cyan)">
+      <button class="auth-back" onclick="showAuthSelector()">←</button> USER LOGIN
+    </div>
+    <label class="auth-label">EMAIL ADDRESS</label>
+    <input id="login-email" class="auth-input" type="email" placeholder="you@example.com" />
+    <div id="login-error" class="auth-error" style="display:none"></div>
+    <button class="auth-submit auth-submit-user" onclick="doUserLogin()">ENTER SYSTEM</button>
+  </div>
+
+  <div class="auth-box" id="auth-admin-form" style="display:none">
+    <div class="auth-form-title" style="color:#FF6080">
+      <button class="auth-back" onclick="showAuthSelector()">←</button> ADMIN ACCESS
+    </div>
+    <label class="auth-label">USERNAME</label>
+    <input id="admin-user" class="auth-input auth-input-red" type="text" placeholder="admin" />
+    <label class="auth-label">PASSWORD</label>
+    <input id="admin-pass" class="auth-input auth-input-red" type="password" placeholder="••••••••" />
+    <div id="admin-error" class="auth-error" style="display:none"></div>
+    <button class="auth-submit auth-submit-admin" onclick="doAdminLogin()">🔒 AUTHENTICATE</button>
+  </div>
+</div>
+
+<!-- ═══════════ APP SHELL ═══════════ -->
+<div id="app" style="display:none">
+  <nav>
+    <div class="logo" onclick="showPage('scan')">
+      <span>🛡</span>
+      <span>SECLITE</span>
+    </div>
+    <div class="navlinks">
+      <button id="nav-scan"    class="active" onclick="showPage('scan')">SCAN</button>
+      <button id="nav-history" onclick="showPage('history')">HISTORY</button>
+      <button id="nav-blogs"   onclick="showPage('blogs')">DAILY BLOGS</button>
+    </div>
+    <div class="user-zone">
+      <span id="admin-badge" class="admin-badge" style="display:none">ADMIN</span>
+      <span class="username" id="nav-username"></span>
+      <button class="logout-btn" onclick="doLogout()">↩ LOGOUT</button>
+    </div>
+  </nav>
+
+  <!-- ── SCAN PAGE ── -->
+  <main>
+    <div id="page-scan" class="page active">
+      <div style="margin-bottom:24px">
+        <h1 style="font-family:var(--orb);font-size:1.35rem;color:var(--cyan);text-shadow:0 0 15px rgba(0,180,255,0.5);letter-spacing:3px;margin-bottom:6px">SECURITY SCANNER</h1>
+        <p style="color:var(--muted2);font-family:var(--mono);font-size:0.73rem;letter-spacing:1px">Real-time multi-vector assessment · Google DNS · SSL Labs · URLScan.io · RDAP · Header Proxy</p>
+      </div>
+
+      <div class="panel">
+        <div class="scan-form">
+          <div class="scan-input-wrap">
+            <span class="scan-input-icon">🔍</span>
+            <input id="scan-url" class="scan-input" type="text" placeholder="Enter target URL or domain (e.g. https://example.com)" />
+          </div>
+          <button id="scan-btn" class="scan-btn" onclick="startScan()">▶ SCAN</button>
+        </div>
+        <div class="api-tags">
+          <span class="api-tag">Google DNS API</span>
+          <span class="api-tag">SSL Labs API</span>
+          <span class="api-tag">URLScan.io API</span>
+          <span class="api-tag">RDAP/WHOIS API</span>
+          <span class="api-tag">Header Proxy</span>
+        </div>
+      </div>
+
+      <div id="progress-panel" class="panel progress-wrap" style="display:none">
+        <div class="progress-label">
+          <span class="progress-step" id="progress-step">Initializing...</span>
+          <span class="progress-pct" id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+        <p style="color:var(--muted2);font-family:var(--mono);font-size:0.68rem;margin-top:4px">
+          SSL Labs may take 60–90 seconds for first-time analysis of a domain. Real-time data is being collected.
+        </p>
+      </div>
+
+      <div id="scan-results" style="display:none"></div>
+
+      <div id="scan-empty" class="empty-state">
+        <div style="font-size:4rem;margin-bottom:12px">🛡</div>
+        <p>Enter a target URL above to begin real-time security scanning</p>
+        <p style="margin-top:8px;font-size:0.75rem;color:var(--muted2)">Supports any public domain or URL • 10 security modules • PDF report generation</p>
+      </div>
+    </div>
+
+    <!-- ── HISTORY PAGE ── -->
+    <div id="page-history" class="page">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1 style="font-family:var(--orb);font-size:1.35rem;color:var(--cyan);text-shadow:0 0 15px rgba(0,180,255,0.5);letter-spacing:3px;margin-bottom:6px">SCAN HISTORY</h1>
+          <p id="history-sub" style="color:var(--muted2);font-family:var(--mono);font-size:0.72rem;letter-spacing:1px"></p>
+        </div>
+        <div id="history-count" style="background:rgba(0,180,255,0.1);border:1px solid rgba(0,180,255,0.3);border-radius:8px;padding:8px 18px;color:var(--cyan);font-family:var(--orb);font-size:0.72rem;letter-spacing:2px"></div>
+      </div>
+      <div id="history-list"></div>
+    </div>
+
+    <!-- ── BLOGS PAGE ── -->
+    <div id="page-blogs" class="page">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:14px">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <span style="font-size:1.2rem">📡</span>
+            <h1 style="font-family:var(--orb);font-size:1.35rem;color:var(--cyan);text-shadow:0 0 15px rgba(0,180,255,0.5);letter-spacing:3px;margin:0">CYBER THREAT INTEL</h1>
+          </div>
+          <p style="color:var(--muted2);font-family:var(--mono);font-size:0.7rem;letter-spacing:1px;margin-bottom:4px">Krebs · Schneier · Security Affairs · Threatpost · The Hacker News · Dark Reading</p>
+          <p id="blogs-cache-note" style="color:#1A3040;font-family:var(--mono);font-size:0.67rem"></p>
+        </div>
+        <button onclick="forceRefreshBlogs()" id="blogs-refresh-btn" style="display:flex;align-items:center;gap:8px;padding:9px 18px;background:rgba(0,180,255,0.08);border:1px solid rgba(0,180,255,0.3);border-radius:6px;color:var(--cyan);cursor:pointer;font-family:var(--orb);font-size:0.67rem;letter-spacing:2px">
+          🔄 FORCE REFRESH
+        </button>
+      </div>
+      <div class="ticker"><span>⚠</span><span>LIVE THREAT FEED — Latest cybersecurity incidents, vulnerabilities &amp; advisories</span></div>
+      <div id="blogs-loading" style="text-align:center;padding:80px 0;display:none">
+        <div class="spinner"></div>
+        <p style="margin-top:14px;color:var(--muted);font-family:var(--mono);font-size:0.8rem">FETCHING THREAT INTELLIGENCE...</p>
+      </div>
+      <div id="blogs-grid" class="blogs-grid"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  UI STATE & AUTH
+// ═══════════════════════════════════════════════════════════════
+const AUTH_KEY    = 'seclite_user';
+const HISTORY_KEY = 'seclite_history';
+const NEWS_KEY    = 'seclite_news';
+const NEWS_TTL    = 24 * 60 * 60 * 1000;
+
+let currentUser = null;
+
+function getLocalUser()      { try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); } catch { return null; } }
+function saveLocalUser(u)    { localStorage.setItem(AUTH_KEY, JSON.stringify(u)); }
+function clearLocalUser()    { localStorage.removeItem(AUTH_KEY); }
+
+function showAuthSelector()  { document.getElementById('auth-selector').style.display=''; document.getElementById('auth-user-form').style.display='none'; document.getElementById('auth-admin-form').style.display='none'; }
+function showAuthForm(type)  { showAuthSelector(); document.getElementById('auth-selector').style.display='none'; document.getElementById(type==='user'?'auth-user-form':'auth-admin-form').style.display=''; }
+
+function doUserLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const err   = document.getElementById('login-error');
+  if (!email || !email.includes('@')) { err.style.display=''; err.textContent='Enter a valid email address'; return; }
+  const u = { email, full_name: email.split('@')[0], isAdmin: false };
+  saveLocalUser(u);
+  bootApp(u);
+}
+
+function doAdminLogin() {
+  const u = document.getElementById('admin-user').value.trim();
+  const p = document.getElementById('admin-pass').value;
+  const err = document.getElementById('admin-error');
+  if (u === 'admin' && p === 'admin@123') {
+    const usr = { email: 'admin@seclite.local', full_name: 'Administrator', isAdmin: true };
+    saveLocalUser(usr);
+    bootApp(usr);
+  } else {
+    err.style.display=''; err.textContent='ACCESS DENIED: Invalid credentials';
+    setTimeout(() => { err.style.display='none'; }, 3000);
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('auth-user-form').style.display !== 'none') doUserLogin();
+    else if (document.getElementById('auth-admin-form').style.display !== 'none') doAdminLogin();
+    else if (document.getElementById('scan-url') === document.activeElement) startScan();
+  }
+});
+
+function doLogout() { clearLocalUser(); location.reload(); }
+
+function bootApp(user) {
+  currentUser = user;
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  document.getElementById('nav-username').textContent = user.full_name || user.email;
+  if (user.isAdmin) document.getElementById('admin-badge').style.display = '';
+  showPage('scan');
+  loadBlogs();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const u = getLocalUser();
+  if (u) bootApp(u);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  PAGE ROUTING
+// ═══════════════════════════════════════════════════════════════
+function showPage(name) {
+  ['scan','history','blogs'].forEach(p => {
+    document.getElementById('page-'+p).classList.toggle('active', p===name);
+    document.getElementById('nav-'+p).classList.toggle('active', p===name);
+  });
+  if (name === 'history') renderHistory();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SEVERITY HELPERS
+// ═══════════════════════════════════════════════════════════════
+const SEV_COLOR = { Critical:'#FF003C', High:'#FF6030', Medium:'#FFD700', Low:'#00E676', Safe:'#00FF88' };
+const SEV_RANK  = { Critical:0, High:1, Medium:2, Low:3, Safe:4 };
+function sevColor(s) { return SEV_COLOR[s] || '#00B4FF'; }
+function sevBg(s)    { const c=sevColor(s); return c+'14'; }
+function sevBorder(s){ const c=sevColor(s); return c+'40'; }
+
+// ═══════════════════════════════════════════════════════════════
+//  SCAN
+// ═══════════════════════════════════════════════════════════════
+let lastResults = null;
+
+async function startScan() {
+  const target = document.getElementById('scan-url').value.trim();
+  if (!target) return;
+
+  document.getElementById('scan-btn').disabled = true;
+  document.getElementById('scan-btn').textContent = 'SCANNING...';
+  document.getElementById('progress-panel').style.display = '';
+  document.getElementById('scan-results').style.display = 'none';
+  document.getElementById('scan-empty').style.display = 'none';
+  document.getElementById('progress-fill').style.width = '2%';
+
+  try {
+    const results = await SCANNER.runScan(target, ({ pct, step }) => {
+      document.getElementById('progress-step').textContent = step;
+      document.getElementById('progress-pct').textContent  = pct + '%';
+      document.getElementById('progress-fill').style.width = pct + '%';
+    });
+
+    lastResults = results;
+    saveScanToHistory(results);
+    renderScanResults(results, 'scan-results');
+    document.getElementById('scan-results').style.display = '';
+    document.getElementById('progress-panel').style.display = 'none';
+  } catch (e) {
+    console.error(e);
+    alert('Scan failed: ' + e.message);
+    document.getElementById('progress-panel').style.display = 'none';
+    document.getElementById('scan-empty').style.display = '';
+  }
+
+  document.getElementById('scan-btn').disabled = false;
+  document.getElementById('scan-btn').textContent = '▶ SCAN';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER SCAN RESULTS (reused by scan page & history expand)
+// ═══════════════════════════════════════════════════════════════
+function renderScanResults(results, containerId, compact = false) {
+  const el = document.getElementById(containerId);
+  const oc = sevColor(results.overallSeverity);
+  const sorted = [...(results.modules||[])].sort((a,b)=>(SEV_RANK[a.severity]??5)-(SEV_RANK[b.severity]??5));
+
+  const criticals = sorted.filter(m=>m.severity==='Critical'||m.severity==='High').length;
+  const mediums   = sorted.filter(m=>m.severity==='Medium').length;
+  const safes     = sorted.filter(m=>m.severity==='Low'||m.severity==='Safe').length;
+
+  const scoreCircle = `
+    <svg width="100" height="100" style="transform:rotate(-90deg)">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="8"/>
+      <circle cx="50" cy="50" r="40" fill="none" stroke="${oc}" stroke-width="8"
+        stroke-dasharray="${(results.overallScore/100)*(2*Math.PI*40)} ${2*Math.PI*40}"
+        stroke-linecap="round" style="filter:drop-shadow(0 0 6px ${oc})"/>
+    </svg>
+    <div style="margin-top:-62px;text-align:center">
+      <div style="font-family:var(--orb);font-size:1.5rem;font-weight:900;color:${oc};text-shadow:0 0 16px ${oc};line-height:1">${results.overallScore}</div>
+      <div style="font-family:var(--mono);font-size:0.5rem;letter-spacing:2px;color:var(--muted2);margin-top:2px">SCORE</div>
+    </div>
+  `;
+
+  const modulesHtml = sorted.map((m, idx) => buildModuleHtml(m, idx, containerId)).join('');
+
+  el.innerHTML = `
+    <div class="results-summary" style="background:${oc}0d;border:1px solid ${oc}35;box-shadow:0 0 20px ${oc}12">
+      <div class="gauge-wrap">
+        ${scoreCircle}
+        <div class="gauge-sev" style="color:${oc}">${results.overallSeverity?.toUpperCase()}</div>
+      </div>
+      <div class="summary-right">
+        <div class="summary-title" style="color:${oc}">${results.overallSeverity?.toUpperCase()} RISK</div>
+        <div class="summary-sub">Assessment complete for <span style="color:var(--cyan);font-family:var(--mono)">${results.hostname||results.targetUrl}</span></div>
+        <div class="stat-badges">
+          <div class="stat-badge" style="border:1px solid #FF003C30"><div class="val" style="color:#FF003C">${criticals}</div><div class="lbl">CRITICAL/HIGH</div></div>
+          <div class="stat-badge" style="border:1px solid #FFD70030"><div class="val" style="color:#FFD700">${mediums}</div><div class="lbl">MEDIUM</div></div>
+          <div class="stat-badge" style="border:1px solid #00E67630"><div class="val" style="color:#00E676">${safes}</div><div class="lbl">LOW/SAFE</div></div>
+          <div class="stat-badge" style="border:1px solid rgba(0,180,255,0.2)"><div class="val" style="color:var(--cyan)">${sorted.length}</div><div class="lbl">MODULES</div></div>
+        </div>
+      </div>
+      <button class="pdf-btn" onclick='generatePDF(${JSON.stringify(results).replace(/'/g,"\\'")})'  style="align-self:center">📄 PDF REPORT</button>
+    </div>
+
+    <div class="info-banner">
+      ℹ️ DNS + Email + WHOIS + Reputation: Live API data &nbsp;|&nbsp; SSL: SSL Labs A/B/F grade &nbsp;|&nbsp; Headers/CSP/Ports/Malware/Vuln: Heuristic analysis &nbsp;|&nbsp; Click any row to expand
+    </div>
+
+    <div class="modules-list">${modulesHtml}</div>
+
+    <div style="text-align:center;margin-top:20px">
+      <button class="pdf-btn" onclick='generatePDF(${JSON.stringify(results).replace(/'/g,"\\'")})'  style="padding:12px 28px;font-size:0.82rem">📄 DOWNLOAD FULL PDF REPORT</button>
+    </div>
+  `;
+}
+
+const _expandState = {};
+
+function buildModuleHtml(m, idx, prefix) {
+  const c       = sevColor(m.severity);
+  const bodyId  = `mod-body-${prefix}-${idx}`;
+  const isOpen  = m.severity === 'Critical';
+
+  const findingsHtml = (m.findings||[]).map((f,i) => `
+    <div class="module-section-item">
+      <span class="module-section-num" style="color:${c}">${String(i+1).padStart(2,'0')}.</span>
+      <span>${escHtml(f)}</span>
+    </div>`).join('');
+
+  const recsHtml = (m.recommendations||[]).map(r => `
+    <div class="module-section-item">
+      <span style="color:#00FF88;flex-shrink:0;margin-top:2px">✓</span>
+      <span>${escHtml(r)}</span>
+    </div>`).join('');
+
+  const stepsHtml = (m.howToFix||[]).map((s,i) => `
+    <div class="module-section-item" style="align-items:flex-start">
+      <div style="background:rgba(0,180,255,0.2);border:1px solid rgba(0,180,255,0.4);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-family:var(--orb);font-size:0.55rem;color:var(--cyan);flex-shrink:0">${i+1}</div>
+      <span style="padding-top:1px">${escHtml(s)}</span>
+    </div>`).join('');
+
+  const refsHtml = (m.references||[]).map(r => `<a href="${r.url}" target="_blank" rel="noopener">↗ ${escHtml(r.title)}</a>`).join('');
+
+  const summaryHtml = m.summary ? `<p class="module-summary" style="border-color:${c}60">${escHtml(m.summary)}</p>` : '';
+
+  const threatHtml = m.threatImpact ? `
+    <div class="module-threat">
+      <div class="module-threat-title">⚡ THREAT IMPACT</div>
+      <p>${escHtml(m.threatImpact)}</p>
+    </div>` : '';
+
+  return `
+    <div class="module-row">
+      <button class="module-header" style="border-color:${c}35;background:${sevBg(m.severity)}" onclick="toggleModule('${bodyId}', this)">
+        <span class="module-chevron" style="color:${isOpen?c:'var(--muted)'}">${isOpen?'▼':'▶'}</span>
+        <span class="module-name">${escHtml(m.name)}</span>
+        <div class="module-bar-wrap">
+          <div class="module-bar"><div class="module-bar-fill" style="width:${m.score}%;background:${c}"></div></div>
+          <span class="module-score" style="color:${c};text-shadow:0 0 8px ${c}">${m.score}</span>
+          <span class="module-sev" style="color:${c};background:${c}1a;border-color:${c}50">${m.severity?.toUpperCase()}</span>
+        </div>
+      </button>
+      <div id="${bodyId}" class="module-body ${isOpen?'open':''}" style="border-color:${c}25;background:${sevBg(m.severity)}">
+        ${summaryHtml}
+        <div class="module-grid">
+          ${findingsHtml ? `<div class="module-section"><div class="module-section-title" style="color:${c}">⚠ FINDINGS</div>${findingsHtml}</div>` : ''}
+          ${recsHtml    ? `<div class="module-section"><div class="module-section-title" style="color:#00FF88">✓ RECOMMENDATIONS</div>${recsHtml}</div>` : ''}
+          ${stepsHtml   ? `<div class="module-section"><div class="module-section-title" style="color:var(--cyan)">🔧 HOW TO FIX</div>${stepsHtml}</div>` : ''}
+          ${threatHtml}
+        </div>
+        ${refsHtml ? `<div class="module-refs"><span>📚 REFS:</span>${refsHtml}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function toggleModule(id, btn) {
+  const body = document.getElementById(id);
+  const open = body.classList.toggle('open');
+  btn.querySelector('.module-chevron').textContent = open ? '▼' : '▶';
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HISTORY
+// ═══════════════════════════════════════════════════════════════
+function getHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); } catch { return []; } }
+
+function saveScanToHistory(results) {
+  const all = getHistory();
+  const entry = {
+    id: Date.now().toString(),
+    user_email: currentUser?.email || 'anonymous',
+    target_url: results.targetUrl,
+    hostname: results.hostname,
+    overall_score: results.overallScore,
+    overall_severity: results.overallSeverity,
+    scan_data: JSON.stringify(results),
+    created_date: new Date().toISOString(),
+  };
+  all.unshift(entry);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(all.slice(0,200)));
+}
+
+function deleteHistoryItem(id) {
+  const all = getHistory().filter(s => s.id !== id);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(all));
+  renderHistory();
+}
+
+function renderHistory() {
+  const all   = getHistory();
+  const items = currentUser?.isAdmin ? all : all.filter(s => s.user_email === currentUser?.email);
+  document.getElementById('history-sub').textContent   = currentUser?.isAdmin ? 'All users — admin view' : `Showing history for ${currentUser?.email}`;
+  document.getElementById('history-count').textContent = items.length + ' SCANS';
+
+  const list = document.getElementById('history-list');
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state"><div style="font-size:3.5rem">🕐</div><p>No scan history yet. Run your first scan!</p></div>';
+    return;
+  }
+
+  list.innerHTML = items.map(scan => {
+    const c = sevColor(scan.overall_severity);
+    return `
+      <div class="history-row" style="border:1px solid ${c}25;box-shadow:0 0 10px ${c}12">
+        <div class="history-row-header" onclick="toggleHistoryRow('hist-body-${scan.id}')">
+          <div class="history-icon" style="background:${c}20"><span style="color:${c}">🌐</span></div>
+          <div style="flex:1;min-width:0">
+            <div class="history-url">${escHtml(scan.target_url)}</div>
+            <div class="history-meta">${new Date(scan.created_date).toLocaleString()}${currentUser?.isAdmin?' · '+scan.user_email:''}</div>
+          </div>
+          <div style="text-align:center;min-width:50px">
+            <div class="history-score" style="color:${c};text-shadow:0 0 8px ${c}">${Math.round(scan.overall_score||0)}</div>
+            <div class="history-sev" style="color:${c}">${scan.overall_severity}</div>
+          </div>
+          <div class="history-actions" onclick="event.stopPropagation()">
+            <button class="history-pdf-btn" onclick="generatePDFFromScan('${scan.id}')">📄 PDF</button>
+            <button class="history-del-btn" onclick="deleteHistoryItem('${scan.id}')">🗑</button>
+            <span style="color:var(--muted2);font-size:14px">▶</span>
+          </div>
+        </div>
+        <div id="hist-body-${scan.id}" style="display:none">
+          <div class="history-modules">
+            <div id="hist-results-${scan.id}"></div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+const _historyLoaded = {};
+function toggleHistoryRow(bodyId) {
+  const el = document.getElementById(bodyId);
+  const open = el.style.display === 'none' || !el.style.display;
+  el.style.display = open ? '' : 'none';
+  // Render modules inline on first open
+  const id = bodyId.replace('hist-body-','');
+  if (open && !_historyLoaded[id]) {
+    _historyLoaded[id] = true;
+    const scan = getHistory().find(s => s.id === id);
+    if (scan?.scan_data) {
+      const results = JSON.parse(scan.scan_data);
+      const containerId = 'hist-results-' + id;
+      renderScanResults(results, containerId, true);
+    }
+  }
+}
+
+function generatePDFFromScan(id) {
+  const scan = getHistory().find(s => s.id === id);
+  if (scan?.scan_data) generatePDF(JSON.parse(scan.scan_data));
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BLOGS
+// ═══════════════════════════════════════════════════════════════
+const NEWS_FALLBACK = [
+  { title:'CISA Warns of Actively Exploited Vulnerabilities in Enterprise Software', source:'CISA', publishedAt:new Date().toISOString(), summary:'CISA issued an advisory urging organizations to immediately patch critical vulnerabilities being actively exploited by threat actors targeting enterprise environments globally.', url:'https://www.cisa.gov/news-events/cybersecurity-advisories', imageUrl:'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=200&fit=crop', category:'Advisory'},
+  { title:'New Ransomware Group Targets Healthcare & Critical Infrastructure', source:'Dark Reading', publishedAt:new Date().toISOString(), summary:'A newly identified ransomware-as-a-service operation has claimed responsibility for attacks on multiple healthcare organizations, demanding millions in cryptocurrency ransom.', url:'https://www.darkreading.com', imageUrl:'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&h=200&fit=crop', category:'Ransomware'},
+  { title:'Critical Zero-Day in Popular VPN Software Actively Exploited', source:'The Hacker News', publishedAt:new Date().toISOString(), summary:'Security researchers discovered a critical zero-day in a widely-deployed VPN solution affecting millions. Emergency patches released. Immediate update required.', url:'https://thehackernews.com', imageUrl:'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=400&h=200&fit=crop', category:'Vulnerability'},
+  { title:'State-Sponsored Hackers Breach Government Networks in Multi-Country Campaign', source:'Security Affairs', publishedAt:new Date().toISOString(), summary:'A sophisticated APT group linked to a nation-state actor compromised government ministries and defense contractors across multiple countries in a coordinated espionage campaign.', url:'https://securityaffairs.com', imageUrl:'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=400&h=200&fit=crop', category:'Breach'},
+  { title:'Malware Campaign Spreads via Fake Software Updates Targeting Enterprises', source:'Krebs on Security', publishedAt:new Date().toISOString(), summary:'Threat actors distributing infostealer malware disguised as legitimate software updates for productivity tools, targeting thousands of corporate employees worldwide.', url:'https://krebsonsecurity.com', imageUrl:'https://images.unsplash.com/photo-1510511459019-5dda7724fd87?w=400&h=200&fit=crop', category:'Malware'},
+  { title:'50 Million User Records Exposed in Social Platform Data Breach', source:'Threatpost', publishedAt:new Date().toISOString(), summary:'A major platform disclosed a breach exposing emails, phone numbers and hashed passwords of 50 million users. Credential stuffing attacks expected to follow.', url:'https://threatpost.com', imageUrl:'https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=400&h=200&fit=crop', category:'Breach'},
+  { title:'Critical Auth Bypass in Enterprise Firewalls: Patch Immediately', source:'Dark Reading', publishedAt:new Date().toISOString(), summary:'Multiple enterprise firewall vendors issued emergency patches after disclosure of a critical authentication bypass allowing unauthenticated remote code execution.', url:'https://www.darkreading.com', imageUrl:'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&h=200&fit=crop', category:'Vulnerability'},
+  { title:'FBI Alert: Business Email Compromise Attacks Surge 45% in 2025', source:'CISA', publishedAt:new Date().toISOString(), summary:'FBI and CISA issued a joint advisory warning of a significant surge in BEC attacks targeting financial departments at mid-sized companies, causing billions in losses.', url:'https://www.cisa.gov/news-events/cybersecurity-advisories', imageUrl:'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=200&fit=crop', category:'Advisory'},
+];
+
+const CAT_COLORS = { Breach:'#FF003C', Ransomware:'#FF6030', Vulnerability:'#FFD700', Advisory:'#00B4FF', Malware:'#FF4080' };
+
+async function loadBlogs() {
+  // Check 24h cache
+  try {
+    const raw = localStorage.getItem(NEWS_KEY);
+    if (raw) {
+      const { articles, ts } = JSON.parse(raw);
+      if (Date.now() - ts < NEWS_TTL && articles?.length) {
+        renderBlogs(articles);
+        document.getElementById('blogs-cache-note').textContent = `⚡ Cached · last updated ${new Date(ts).toLocaleString()} · auto-refreshes every 24h`;
+        return;
+      }
+    }
+  } catch {}
+
+  await fetchAndRenderBlogs();
+}
+
+async function forceRefreshBlogs() {
+  localStorage.removeItem(NEWS_KEY);
+  await fetchAndRenderBlogs();
+}
+
+async function fetchAndRenderBlogs() {
+  document.getElementById('blogs-loading').style.display = '';
+  document.getElementById('blogs-grid').innerHTML = '';
+  const FEEDS = [
+    { url:'https://krebsonsecurity.com/feed/', source:'Krebs on Security' },
+    { url:'https://www.schneier.com/blog/atom.xml', source:'Schneier on Security' },
+    { url:'https://securityaffairs.com/feed', source:'Security Affairs' },
+    { url:'https://threatpost.com/feed/', source:'Threatpost' },
+    { url:'https://feeds.feedburner.com/TheHackersNews', source:'The Hacker News' },
+    { url:'https://www.darkreading.com/rss.xml', source:'Dark Reading' },
+  ];
+  const proxy = 'https://api.rss2json.com/v1/api.json';
+  const results = await Promise.allSettled(FEEDS.map(f =>
+    fetch(`${proxy}?rss_url=${encodeURIComponent(f.url)}&count=3`).then(r=>r.json()).then(d => {
+      if (d.status !== 'ok') return [];
+      return (d.items||[]).map(item => ({
+        title: item.title, source: f.source, publishedAt: item.pubDate,
+        summary: (item.description||item.content||'').replace(/<[^>]*>/g,'').trim().slice(0,200)+'...',
+        url: item.link, imageUrl: item.thumbnail || item.enclosure?.link || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=200&fit=crop',
+        category: detectCat(item.title||''),
+      }));
+    })
+  ));
+  const live = results.filter(r=>r.status==='fulfilled'&&r.value.length).flatMap(r=>r.value).sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
+  const articles = live.length >= 4 ? live : [...live, ...NEWS_FALLBACK].slice(0,12);
+  try { localStorage.setItem(NEWS_KEY, JSON.stringify({ articles, ts: Date.now() })); } catch {}
+  const note = `🔄 Fetched live · ${new Date().toLocaleString()} · auto-refreshes every 24h`;
+  document.getElementById('blogs-cache-note').textContent = note;
+  document.getElementById('blogs-loading').style.display = 'none';
+  renderBlogs(articles);
+}
+
+function detectCat(title) {
+  const t = title.toLowerCase();
+  if (t.includes('ransomware')) return 'Ransomware';
+  if (t.includes('breach')||t.includes('leak')||t.includes('stolen')) return 'Breach';
+  if (t.includes('cve')||t.includes('vulnerabilit')||t.includes('zero-day')) return 'Vulnerability';
+  if (t.includes('malware')||t.includes('phishing')||t.includes('trojan')) return 'Malware';
+  return 'Advisory';
+}
+
+function renderBlogs(articles) {
+  document.getElementById('blogs-loading').style.display = 'none';
+  const fallback = 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&h=200&fit=crop';
+  document.getElementById('blogs-grid').innerHTML = articles.map(a => {
+    const cc = CAT_COLORS[a.category] || '#00B4FF';
+    return `
+      <a class="news-card" href="${a.url}" target="_blank" rel="noopener">
+        <div class="news-thumb">
+          <img src="${a.imageUrl||fallback}" alt="" onerror="this.src='${fallback}'" />
+          <div class="news-thumb-overlay"></div>
+          ${a.category ? `<span class="news-cat" style="color:${cc};border-color:${cc}60;background:${cc}20">${a.category}</span>` : ''}
+        </div>
+        <div class="news-body">
+          <div class="news-title">${escHtml(a.title)}</div>
+          <div class="news-summary">${escHtml(a.summary)}</div>
+          <div class="news-footer">
+            <span class="news-date">📅 ${a.publishedAt ? new Date(a.publishedAt).toLocaleDateString() : 'Recent'}</span>
+            <span class="news-source">${escHtml(a.source)} ↗</span>
+          </div>
+        </div>
+      </a>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PDF REPORT  (uses jsPDF from CDN, loaded lazily)
+// ═══════════════════════════════════════════════════════════════
+function generatePDF(results) {
+  if (typeof window.jspdf === 'undefined') {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = () => _buildPDF(results);
+    document.head.appendChild(s);
+  } else { _buildPDF(results); }
+}
+
+function _buildPDF(results) {
+  const { jsPDF } = window.jspdf;
+  const doc  = new jsPDF();
+  const W    = 210, M = 15, CW = W - M*2;
+  const SEV_C = { Critical:[255,0,60], High:[255,96,48], Medium:[255,215,0], Low:[0,230,118], Safe:[0,255,136] };
+  const wrap  = (text, x, y, maxW, lh=5.5) => { const ls=doc.splitTextToSize(String(text||''),maxW); ls.forEach((l,i)=>doc.text(l,x,y+i*lh)); return y+ls.length*lh; };
+
+  // Cover
+  doc.setFillColor(5,10,15); doc.rect(0,0,210,297,'F');
+  doc.setFillColor(0,100,180); doc.rect(0,0,210,4,'F');
+  doc.setTextColor(0,180,255); doc.setFontSize(28); doc.setFont('helvetica','bold');
+  doc.text('SECLITE', 105, 55, {align:'center'});
+  doc.setFontSize(11); doc.setTextColor(150,200,255);
+  doc.text('UNIFIED SECURITY SCANNER — CONFIDENTIAL REPORT', 105, 66, {align:'center'});
+  doc.setDrawColor(0,100,180); doc.line(M,74,W-M,74);
+  doc.setTextColor(200,230,255); doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`Target: ${results.targetUrl||results.hostname}`, M, 86);
+  doc.text(`Scanned: ${new Date(results.scannedAt||Date.now()).toLocaleString()}`, M, 94);
+
+  const oc = SEV_C[results.overallSeverity]||[0,180,255];
+  doc.setFillColor(...oc); doc.roundedRect(M,108,CW,35,3,3,'F');
+  doc.setTextColor(5,10,15); doc.setFontSize(36); doc.setFont('helvetica','bold');
+  doc.text(`${Math.round(results.overallScore||0)}`, 60, 131, {align:'center'});
+  doc.setFontSize(11); doc.text('OVERALL SCORE', 60, 140, {align:'center'});
+  doc.setFontSize(24); doc.text(results.overallSeverity||'N/A', 155, 128, {align:'center'});
+  doc.setFontSize(10); doc.text('SEVERITY', 155, 138, {align:'center'});
+
+  doc.setTextColor(80,130,160); doc.setFontSize(8);
+  doc.text('CONFIDENTIAL — Generated by SecLite Security Platform — For Authorized Use Only', 105, 288, {align:'center'});
+
+  // Module pages
+  (results.modules||[]).forEach(mod => {
+    doc.addPage();
+    doc.setFillColor(5,10,15); doc.rect(0,0,210,297,'F');
+    const mc = SEV_C[mod.severity]||[0,180,255];
+    doc.setFillColor(...mc); doc.rect(0,0,4,297,'F');
+    let y = 18;
+    doc.setTextColor(...mc); doc.setFontSize(15); doc.setFont('helvetica','bold');
+    doc.text((mod.name||'').toUpperCase(), M+4, y); y+=8;
+    doc.setTextColor(180,220,255); doc.setFontSize(9); doc.setFont('helvetica','normal');
+    y = wrap(mod.summary||'', M+4, y, CW-4); y+=3;
+
+    // Score badge
+    doc.setFillColor(15,28,40); doc.roundedRect(M+4,y,55,18,2,2,'F');
+    doc.setTextColor(...mc); doc.setFontSize(22); doc.setFont('helvetica','bold');
+    doc.text(`${mod.score}`, M+22, y+13, {align:'center'});
+    doc.setFontSize(8); doc.setTextColor(130,190,220);
+    doc.text('SCORE', M+38, y+8); doc.setFontSize(10); doc.text(mod.severity||'', M+38, y+15);
+    y+=24;
+
+    const sec = (title, items) => {
+      if (!items?.length) return;
+      doc.setFillColor(18,32,46); doc.rect(M+4,y,CW-4,7,'F');
+      doc.setTextColor(0,180,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text(title, M+7, y+5); y+=9;
+      doc.setFont('helvetica','normal'); doc.setTextColor(180,220,255); doc.setFontSize(7.5);
+      items.forEach((item,i) => {
+        const t = `${i+1}. ${item}`;
+        y = wrap(t, M+8, y, CW-12, 4.8); y+=2;
+        if (y>272) { doc.addPage(); doc.setFillColor(5,10,15); doc.rect(0,0,210,297,'F'); y=16; }
+      });
+      y+=3;
+    };
+
+    sec('FINDINGS', mod.findings);
+    sec('RECOMMENDATIONS', mod.recommendations);
+    sec('HOW TO FIX', mod.howToFix);
+    if (mod.threatImpact) {
+      doc.setFillColor(18,32,46); doc.rect(M+4,y,CW-4,7,'F');
+      doc.setTextColor(0,180,255); doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text('THREAT IMPACT', M+7, y+5); y+=9;
+      doc.setFont('helvetica','normal'); doc.setTextColor(180,220,255); doc.setFontSize(7.5);
+      y = wrap(mod.threatImpact, M+8, y, CW-12, 4.8); y+=4;
+    }
+    if (mod.references?.length) {
+      doc.setTextColor(80,120,200); doc.setFontSize(7.5);
+      mod.references.forEach(r => { doc.text(`• ${r.title}: ${r.url}`, M+6, y, {maxWidth:CW-8}); y+=5; });
+    }
+  });
+
+  const fname = `SecLite_${(results.hostname||'scan').replace(/[^a-z0-9]/gi,'_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(fname);
+}
+</script>
+</body>
+</html>
